@@ -9,7 +9,7 @@ import requests
 from dotenv import load_dotenv
 
 from collector import collect
-from formatter import MIN_IMPORTANCE, filter_important, format_message
+from formatter import format_message
 from storage import filter_new, mark_seen, purge_old
 from summarizer import summarize_all
 
@@ -18,6 +18,7 @@ load_dotenv(Path(__file__).parent / ".env")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 MAX_ARTICLES_PER_RUN = 10  # borne le coût LLM d'un run
+MAX_POSTS = 5  # nombre de messages envoyés par run (les mieux notés)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S")
 log = logging.getLogger("veille")
@@ -65,13 +66,14 @@ def run() -> None:
     summarized = summarize_all(new_articles)
     log.info("🤖 Résumés : %d/%d réussis", len(summarized), len(new_articles))
 
-    important = filter_important(summarized)
-    log.info("⭐ Filtre importance : %d article(s) ≥ %d/10", len(important), MIN_IMPORTANCE)
-    for _, s in summarized:
+    ranked = sorted(summarized, key=lambda pair: pair[1].note_importance, reverse=True)
+    to_send = ranked[:MAX_POSTS]
+    log.info("⭐ Sélection : top %d sur %d article(s) résumé(s)", len(to_send), len(ranked))
+    for _, s in ranked:
         log.info("   %d/10 [%s] %s", s.note_importance, s.categorie, s.titre)
 
     sent = 0
-    for article, summary in important:
+    for article, summary in to_send:
         if send_telegram(format_message(article, summary)):
             sent += 1
             log.info("📬 Envoyé : %s", summary.titre)
