@@ -1,2 +1,5 @@
 .env
 .techno_ai
+__pycache__/
+# token Telegram en dur dedans — ne jamais commiter
+telegram_bot_test.py

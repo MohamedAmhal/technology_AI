@@ -1,0 +1,14 @@
+# Liste des flux RSS à collecter.
+# Pour ajouter une source : une entrée avec `name` (affiché comme source) et `url`.
+sources:
+  - name: Hacker News
+    url: https://hnrss.org/frontpage
+
+  - name: TechCrunch
+    url: https://techcrunch.com/feed/
+
+  - name: The Verge
+    url: https://www.theverge.com/rss/index.xml
+
+  - name: Ars Technica
+    url: https://feeds.arstechnica.com/arstechnica/index

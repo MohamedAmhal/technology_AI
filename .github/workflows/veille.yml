@@ -1,0 +1,53 @@
+name: Veille techno
+
+on:
+  schedule:
+    # Toutes les 6 heures (heure UTC)
+    - cron: "0 */6 * * *"
+  # Permet de lancer à la main depuis l'onglet Actions
+  workflow_dispatch:
+
+# Jamais deux runs en parallèle (sinon conflit sur le commit d'articles.db)
+concurrency:
+  group: veille
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  veille:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Dépendances
+        run: pip install -r requirements.txt
+
+      - name: Lancer le pipeline
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python main.py
+
+      - name: Recommiter la base SQLite
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add articles.db
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: maj articles.db (run veille)"
+            git pull --rebase origin master
+            git push
+          else
+            echo "articles.db inchangée, rien à commiter"
+          fi
