@@ -42,8 +42,8 @@ Règles d'écriture strictes :
 
 Réponds UNIQUEMENT avec un objet JSON contenant :
 - "titre" : titre en français, 10 mots max, qui dit le fait essentiel
-- "resume" : 2 phrases max. Phrase 1 : le fait. Phrase 2 : le chiffre ou détail le plus marquant (facile à retenir).
-- "pourquoi_important" : 1 phrase simple : ce que ça change concrètement.
+- "resume" : 4 à 6 phrases donnant une vue complète de la news : d'abord le fait principal, puis les détails clés (chiffres, acteurs, comment ça marche), puis le contexte utile pour comprendre. Toujours des phrases courtes et simples.
+- "pourquoi_important" : 1 à 2 phrases simples : ce que ça change concrètement.
 - "categorie" : une seule valeur parmi {categories}
 - "note_importance" : un entier de 1 (anecdotique) à 10 (majeur)
 

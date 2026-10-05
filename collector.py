@@ -12,7 +12,7 @@ import feedparser
 import yaml
 
 CONFIG_PATH = Path(__file__).parent / "sources.yaml"
-EXCERPT_MAX_LENGTH = 300
+EXCERPT_MAX_LENGTH = 1500
 FETCH_TIMEOUT_SECONDS = 10
 
 
