@@ -18,7 +18,7 @@ load_dotenv(Path(__file__).parent / ".env")
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-MAX_ARTICLES_PER_RUN = 10  # borne le coût LLM d'un run
+MAX_ARTICLES_PER_RUN = 15  # borne le coût LLM d'un run
 MAX_POSTS = 5  # nombre de messages envoyés par run (les mieux notés)
 
 # Ordre de priorité d'envoi : l'IA d'abord, puis l'informatique, puis le reste.

@@ -12,3 +12,28 @@ sources:
 
   - name: Ars Technica
     url: https://feeds.arstechnica.com/arstechnica/index
+
+  # --- Sources spécialisées IA ---
+  - name: TechCrunch AI
+    url: https://techcrunch.com/category/artificial-intelligence/feed/
+
+  - name: The Verge AI
+    url: https://www.theverge.com/rss/ai-artificial-intelligence/index.xml
+
+  - name: MIT Tech Review AI
+    url: https://www.technologyreview.com/topic/artificial-intelligence/feed
+
+  - name: The Decoder
+    url: https://the-decoder.com/feed/
+
+  - name: Google AI Blog
+    url: https://blog.google/technology/ai/rss/
+
+  - name: DeepMind
+    url: https://deepmind.google/blog/rss.xml
+
+  - name: OpenAI
+    url: https://openai.com/news/rss.xml
+
+  - name: Hugging Face
+    url: https://huggingface.co/blog/feed.xml
