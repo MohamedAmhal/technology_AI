@@ -45,33 +45,51 @@ def filter_important(
     return kept
 
 
+def _importance_badge(note: int) -> str:
+    """Un indicateur lisible en un coup d'œil, plus parlant qu'un simple chiffre."""
+    if note >= 9:
+        return "🔥 Majeur"
+    if note >= 7:
+        return "🟠 Important"
+    if note >= 5:
+        return "🟡 À noter"
+    return "⚪️ En bref"
+
+
 def format_message(article: Article, summary: Summary) -> str:
-    """Construit le message HTML Telegram pour un article résumé."""
+    """Construit le message HTML Telegram pour un article résumé.
+
+    Structure (du plus au moins important, lisible en diagonale) :
+    contexte (catégorie · source) → titre → résumé → pourquoi → action.
+    """
     emoji = CATEGORY_EMOJIS.get(summary.categorie, "📰")
-    stars = "⭐" * summary.note_importance if summary.note_importance >= 9 else ""
     hashtags = " ".join(filter(None, [_hashtag(summary.categorie), _hashtag(article.source)]))
 
     lines = [
-        f"{emoji} <b>{_escape(summary.titre)}</b> {stars}".rstrip(),
+        f"{emoji} <b>{summary.categorie.upper()}</b> · {_escape(article.source)} · {_importance_badge(summary.note_importance)}",
+        "",
+        f"<b>{_escape(summary.titre)}</b>",
         "",
         _escape(summary.resume),
         "",
-        f"💡 <i>{_escape(summary.pourquoi_important)}</i>",
+        f"<blockquote>💡 {_escape(summary.pourquoi_important)}</blockquote>",
         "",
-        f"📊 Importance : <b>{summary.note_importance}/10</b> · 📌 {_escape(article.source)}",
-        f'🔗 <a href="{html.escape(article.link, quote=True)}">Lire l’article</a>',
-        "",
-        hashtags,
+        f'➜ <a href="{html.escape(article.link, quote=True)}">Lire l’article</a>   <i>{hashtags}</i>',
     ]
     return "\n".join(lines).strip()
 
 
 def format_digest(digest: dict) -> str:
     """Message HTML du récap quotidien ({titre, points})."""
-    lines = [f"🌙 <b>Récap du jour — {_escape(digest['titre'])}</b>", ""]
-    for point in digest["points"]:
-        lines.append(f"▪️ {_escape(point)}")
-    lines += ["", "#RécapDuJour"]
+    lines = [
+        "🌙 <b>RÉCAP DU JOUR</b>",
+        f"<i>{_escape(digest['titre'])}</i>",
+        "",
+    ]
+    for i, point in enumerate(digest["points"], start=1):
+        lines.append(f"{i}️⃣ {_escape(point)}")
+        lines.append("")
+    lines.append("<i>Bonne nuit 👋  #RécapDuJour</i>")
     return "\n".join(lines)
 
 
