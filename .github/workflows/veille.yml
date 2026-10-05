@@ -2,10 +2,18 @@ name: Veille techno
 
 on:
   schedule:
-    # Toutes les 6 heures (heure UTC)
-    - cron: "0 */6 * * *"
+    # Les crons GitHub sont en UTC. Heure de Paris = UTC+2 (été) / UTC+1 (hiver, dès le 25 oct).
+    - cron: "0 9 * * *"   # veille  → 11h Paris (été)
+    - cron: "0 16 * * *"  # veille  → 18h Paris (été)
+    - cron: "0 22 * * *"  # récap   → 00h Paris (été)
   # Permet de lancer à la main depuis l'onglet Actions
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "veille (articles) ou digest (récap du jour)"
+        type: choice
+        options: [veille, digest]
+        default: veille
 
 # Jamais deux runs en parallèle (sinon conflit sur le commit d'articles.db)
 concurrency:
@@ -37,7 +45,12 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python main.py
+        run: |
+          if [ "${{ github.event.schedule }}" = "0 22 * * *" ] || [ "${{ inputs.mode }}" = "digest" ]; then
+            python main.py digest
+          else
+            python main.py
+          fi
 
       - name: Recommiter la base SQLite
         run: |

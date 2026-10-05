@@ -31,11 +31,19 @@ CATEGORIES = ["IA", "Hardware", "Logiciel", "Sécurité", "Startups", "Science",
 
 log = logging.getLogger("veille.summarizer")
 
-PROMPT_TEMPLATE = """Tu es un assistant de veille technologique pour un lecteur francophone.
-Analyse cet article et réponds UNIQUEMENT avec un objet JSON contenant :
-- "titre" : le titre traduit/reformulé en français, clair et informatif
-- "resume" : un résumé en 2-3 phrases, en français
-- "pourquoi_important" : 1-2 phrases expliquant pourquoi c'est important (ou pas)
+PROMPT_TEMPLATE = """Tu es un assistant de veille techno pour un lecteur francophone pressé.
+Objectif : qu'il comprenne ET retienne l'info en 10 secondes, comme si tu la racontais à un ami.
+
+Règles d'écriture strictes :
+- phrases courtes (15 mots max), une seule idée par phrase
+- mots simples, pas de jargon ; si un terme technique est indispensable, explique-le en 3-4 mots
+- commence par le fait principal, jamais par le contexte
+- ne rien inventer : uniquement ce que dit l'article ; pas de liens dans le texte
+
+Réponds UNIQUEMENT avec un objet JSON contenant :
+- "titre" : titre en français, 10 mots max, qui dit le fait essentiel
+- "resume" : 2 phrases max. Phrase 1 : le fait. Phrase 2 : le chiffre ou détail le plus marquant (facile à retenir).
+- "pourquoi_important" : 1 phrase simple : ce que ça change concrètement.
 - "categorie" : une seule valeur parmi {categories}
 - "note_importance" : un entier de 1 (anecdotique) à 10 (majeur)
 
@@ -44,9 +52,29 @@ Titre : {title}
 Source : {source}
 Extrait : {excerpt}
 Lien : {link}
-
-essayer de simplifier le texte et expliquer les termes techniques si possible, mais ne pas inventer d'informations. Ne pas inclure de liens dans le résumé. Ne pas inclure de texte hors du JSON, 
 """
+
+DIGEST_PROMPT = """Tu es un assistant de veille techno. Voici les articles résumés aujourd'hui.
+Écris le récap du jour pour un lecteur francophone pressé, à lire en 30 secondes.
+
+Règles :
+- "titre" : un titre de récap court (8 mots max) qui capture LA tendance du jour
+- "points" : 3 à 5 points, un par info majeure, dans cet ordre : IA d'abord, puis informatique (logiciel, hardware, sécurité), puis le reste
+- chaque point : 1 phrase simple de 20 mots max, mémorisable, avec le fait + le détail marquant
+- ignore les articles anecdotiques ; ne rien inventer
+
+Articles du jour :
+{articles}
+"""
+
+DIGEST_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "titre": {"type": "STRING"},
+        "points": {"type": "ARRAY", "items": {"type": "STRING"}},
+    },
+    "required": ["titre", "points"],
+}
 
 RESPONSE_SCHEMA = {
     "type": "OBJECT",
@@ -70,13 +98,13 @@ class Summary:
     note_importance: int
 
 
-def _call_gemini(prompt: str, model: str) -> str:
+def _call_gemini(prompt: str, model: str, schema: dict = RESPONSE_SCHEMA) -> str:
     """Appelle l'API avec retries (backoff exponentiel, Retry-After respecté sur 429)."""
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
             "responseMimeType": "application/json",
-            "responseSchema": RESPONSE_SCHEMA,
+            "responseSchema": schema,
             "temperature": 0.3,
             # Pas de "thinking" pour un simple résumé : réponse bien plus rapide,
             # et évite les réponses interminables quand le modèle est sous charge.
@@ -145,6 +173,32 @@ def summarize(article: Article) -> Summary | None:
             if model != MODELS[-1]:
                 log.warning("🔀 %s indisponible, bascule sur %s", model, MODELS[MODELS.index(model) + 1])
     log.error("❌ Résumé impossible pour « %s » : %s", article.title[:60], last_error)
+    return None
+
+
+def make_daily_digest(items: list[dict]) -> dict | None:
+    """Condense les résumés du jour en un récap {titre, points}. None si échec."""
+    if not API_KEY:
+        raise RuntimeError("GEMINI_API_KEY manquante dans .env")
+    lines = "\n".join(
+        f"- [{it['categorie']}] ({it['note']}/10) {it['titre']} : {it['resume']}" for it in items
+    )
+    prompt = DIGEST_PROMPT.format(articles=lines)
+    last_error: Exception | None = None
+    for model in MODELS:
+        try:
+            raw = _call_gemini(prompt, model, schema=DIGEST_SCHEMA).strip()
+            if raw.startswith("```"):
+                raw = raw.strip("`").removeprefix("json").strip()
+            data = json.loads(raw)
+            if data.get("titre") and data.get("points"):
+                return data
+            raise ValueError(f"récap incomplet : {data}")
+        except (RuntimeError, json.JSONDecodeError, ValueError) as e:
+            last_error = e
+            if model != MODELS[-1]:
+                log.warning("🔀 %s indisponible, bascule sur %s", model, MODELS[MODELS.index(model) + 1])
+    log.error("❌ Récap du jour impossible : %s", last_error)
     return None
 
 

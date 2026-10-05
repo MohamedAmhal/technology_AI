@@ -66,6 +66,15 @@ def format_message(article: Article, summary: Summary) -> str:
     return "\n".join(lines).strip()
 
 
+def format_digest(digest: dict) -> str:
+    """Message HTML du récap quotidien ({titre, points})."""
+    lines = [f"🌙 <b>Récap du jour — {_escape(digest['titre'])}</b>", ""]
+    for point in digest["points"]:
+        lines.append(f"▪️ {_escape(point)}")
+    lines += ["", "#RécapDuJour"]
+    return "\n".join(lines)
+
+
 if __name__ == "__main__":
     from datetime import datetime, timezone
 

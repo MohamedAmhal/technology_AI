@@ -2,6 +2,7 @@
 
 import logging
 import os
+import sys
 import time
 from pathlib import Path
 
@@ -9,9 +10,9 @@ import requests
 from dotenv import load_dotenv
 
 from collector import collect
-from formatter import format_message
-from storage import filter_new, mark_seen, purge_old
-from summarizer import summarize_all
+from formatter import format_digest, format_message
+from storage import filter_new, mark_seen, purge_old, summaries_of_day
+from summarizer import make_daily_digest, summarize_all
 
 load_dotenv(Path(__file__).parent / ".env")
 
@@ -19,6 +20,10 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 MAX_ARTICLES_PER_RUN = 10  # borne le coût LLM d'un run
 MAX_POSTS = 5  # nombre de messages envoyés par run (les mieux notés)
+
+# Ordre de priorité d'envoi : l'IA d'abord, puis l'informatique, puis le reste.
+CATEGORY_PRIORITY = {"IA": 0, "Logiciel": 1, "Hardware": 1, "Sécurité": 1}
+OTHER_PRIORITY = 2  # Startups, Science, Société, Autre
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", datefmt="%H:%M:%S")
 log = logging.getLogger("veille")
@@ -66,9 +71,15 @@ def run() -> None:
     summarized = summarize_all(new_articles)
     log.info("🤖 Résumés : %d/%d réussis", len(summarized), len(new_articles))
 
-    ranked = sorted(summarized, key=lambda pair: pair[1].note_importance, reverse=True)
+    ranked = sorted(
+        summarized,
+        key=lambda pair: (
+            CATEGORY_PRIORITY.get(pair[1].categorie, OTHER_PRIORITY),
+            -pair[1].note_importance,
+        ),
+    )
     to_send = ranked[:MAX_POSTS]
-    log.info("⭐ Sélection : top %d sur %d article(s) résumé(s)", len(to_send), len(ranked))
+    log.info("⭐ Sélection : top %d sur %d (IA > informatique > reste, puis note)", len(to_send), len(ranked))
     for _, s in ranked:
         log.info("   %d/10 [%s] %s", s.note_importance, s.categorie, s.titre)
 
@@ -79,12 +90,33 @@ def run() -> None:
             log.info("📬 Envoyé : %s", summary.titre)
         time.sleep(1)  # limite Telegram : ~1 msg/s par chat
 
-    # Tout article résumé est marqué vu (même sous le seuil : inutile de le re-résumer).
+    # Tout article résumé est marqué vu, avec son résumé (pour le récap du jour).
     # Un article dont le résumé a échoué reste non-vu et sera retenté au prochain run.
-    for article, _ in summarized:
-        mark_seen(article)
+    for article, summary in summarized:
+        mark_seen(article, summary)
     log.info("✅ Terminé : %d message(s) envoyé(s), %d article(s) marqués vus", sent, len(summarized))
 
 
+def run_digest() -> None:
+    """Récap de fin de journée : condense les résumés des dernières 24h en un seul message."""
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        raise RuntimeError("TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID manquants dans .env")
+
+    items = summaries_of_day()
+    log.info("🌙 Récap : %d article(s) résumé(s) dans les dernières 24h", len(items))
+    if not items:
+        log.info("Rien à récapituler, fin.")
+        return
+
+    digest = make_daily_digest(items)
+    if digest and send_telegram(format_digest(digest)):
+        log.info("📬 Récap envoyé : %s (%d points)", digest["titre"], len(digest["points"]))
+    else:
+        log.error("Récap non envoyé")
+
+
 if __name__ == "__main__":
-    run()
+    if len(sys.argv) > 1 and sys.argv[1] == "digest":
+        run_digest()
+    else:
+        run()

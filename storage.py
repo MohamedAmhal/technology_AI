@@ -26,6 +26,16 @@ def _connect(db_path: Path = DB_PATH) -> sqlite3.Connection:
         )
         """
     )
+    # Migration : colonnes de résumé ajoutées pour le récap quotidien
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(seen_articles)")}
+    for column, col_type in (
+        ("titre_fr", "TEXT"),
+        ("resume", "TEXT"),
+        ("categorie", "TEXT"),
+        ("note", "INTEGER"),
+    ):
+        if column not in existing:
+            conn.execute(f"ALTER TABLE seen_articles ADD COLUMN {column} {col_type}")
     return conn
 
 
@@ -35,19 +45,44 @@ def is_seen(url: str, db_path: Path = DB_PATH) -> bool:
     return row is not None
 
 
-def mark_seen(article: Article, db_path: Path = DB_PATH) -> None:
-    """À appeler une fois l'article traité, pour ne plus le revoir."""
+def mark_seen(article: Article, summary=None, db_path: Path = DB_PATH) -> None:
+    """À appeler une fois l'article traité, pour ne plus le revoir.
+
+    Avec `summary` (un Summary du summarizer), le résumé est stocké aussi,
+    ce qui alimente le récap quotidien.
+    """
     with _connect(db_path) as conn:
         conn.execute(
-            "INSERT OR IGNORE INTO seen_articles (url, title, source, published_at, seen_at) VALUES (?, ?, ?, ?, ?)",
+            """INSERT OR REPLACE INTO seen_articles
+               (url, title, source, published_at, seen_at, titre_fr, resume, categorie, note)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 article.link,
                 article.title,
                 article.source,
                 article.date.isoformat() if article.date else None,
                 datetime.now(timezone.utc).isoformat(),
+                summary.titre if summary else None,
+                summary.resume if summary else None,
+                summary.categorie if summary else None,
+                summary.note_importance if summary else None,
             ),
         )
+
+
+def summaries_of_day(hours: int = 24, db_path: Path = DB_PATH) -> list[dict]:
+    """Les articles résumés des dernières `hours` heures, les mieux notés d'abord."""
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+    with _connect(db_path) as conn:
+        rows = conn.execute(
+            """SELECT titre_fr, resume, categorie, note, source FROM seen_articles
+               WHERE seen_at >= ? AND resume IS NOT NULL ORDER BY note DESC""",
+            (cutoff.isoformat(),),
+        ).fetchall()
+    return [
+        {"titre": r[0], "resume": r[1], "categorie": r[2], "note": r[3], "source": r[4]}
+        for r in rows
+    ]
 
 
 def filter_new(
